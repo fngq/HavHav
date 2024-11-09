@@ -1,6 +1,6 @@
 import os
 import logging
-from download import Jmanager,Jtask
+from jable.jable import Jmanager,Jtask
 from fastapi import APIRouter, FastAPI,Request
 from starlette.responses import FileResponse 
 from fastapi import status, HTTPException
