@@ -1,0 +1,109 @@
+/* 基本样式 */
+
+none {
+    border: 1px solid red;
+}
+
+html,body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.head_icon {
+    height: 40px;
+    width: 40px;
+}
+
+.head_bar {
+    background-color: #FFC0CB;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    flex-direction: column; /* 垂直排列子元素 */
+}
+
+.head_title {
+    margin: 10px;
+}
+
+.add_task_bar {
+    margin-left: 40px;
+    margin-bottom: 20px;
+    display: flex;
+    height: 18px;
+}
+
+.marginl20 {
+    margin-left: 10px;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #ccc;
+    margin-bottom: 10px;
+    background-color: #f1f1f1;
+}
+
+.row img {
+    width: 100px;
+    height: 67px;
+    margin-right: 15px;
+}
+
+.row .title {
+    flex-grow: 1;
+    font-size: 20px;
+    margin-right: 15px;
+    overflow: hidden;
+}
+
+.progress-container {
+    width: 160px;
+    background-color: #d1d1d1;
+    border-radius: 10px;
+    height: 20px;
+    margin-right: 25px;
+    overflow: hidden;
+}
+
+.progress {
+    height: 100%;
+    background-color: #4caf50;
+    width: 0;
+}
+
+.progress-text {
+    top: 0;
+    height: 16px;
+    width: 160px;
+    text-align: center;
+    line-height: 20px;
+    color: white;
+    font-size: 16px;
+}
+
+.progress-str {
+    margin-right: 15px;
+}
+
+.row button {
+    margin-right: 15px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.row a {
+    color: blue;
+    text-decoration: none;
+    margin-right: 20px;
+}
