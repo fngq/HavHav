@@ -13,28 +13,47 @@ from selenium.webdriver.chrome.options import Options
 import logging
 from bs4 import BeautifulSoup
 from functools import partial
-import concurrent.futures
-from threading import Thread
-from collections import OrderedDict
 
+from threading import Event
+from collections import OrderedDict
+from queue import Queue,Empty
+from concurrent.futures import ThreadPoolExecutor
+
+from enum import Enum
+
+class TaskStatus(Enum):
+    Pending : 'pending'
+    Running : 'running'
+    Finished : 'finished'
+    Failed : 'failed'
+    Canceled : 'canceled'
+
+class InvalidHost(Exception):
+    def __init__(self,host):
+        super().__init__()
+        self.host = host
+    def __str__(self):
+        return f"unsupported host {self.host}"
+
+class InvalidUrlPath(Exception):
+    pass
 
 
 jlogger = logging.getLogger('jlog')
 jlogger.setLevel(logging.DEBUG)
 
-class JableApp():
-    def __init__(self,logger = jlogger,downloadDir = "./downloads"):
+class Jmanager():
+    def __init__(self,logger = jlogger,downloadDir = "./downloads",concur = 3):
+        self.logger = logger
         self.downloadDir = downloadDir
+        self.tasks = OrderedDict()
+        self.taskq = Queue()
 
-    async def run_task(self,url:ParseResult):
-        purl = urlparse(url)
+        self.executer = ThreadPoolExecutor(max_workers=concur)
+        self.executer.submit(self.run_task)
+        self.stop = Event()
 
-
-class Jtask():
-    def __init__(self,url:ParseResult,logger=jlogger,downloadDir=''):
-        self._url = url
-        self.logger = jlogger
-        self._downloadDir = downloadDir
+        self._driver = None
         self._initDriver()
 
     def _initDriver(self):
@@ -53,27 +72,70 @@ class Jtask():
             })
         dr = webdriver.Chrome(options=options)
         self._driver = dr
+
+    def load_history(self):
+        folder = self.downloadDir
+
+
+    def add_task(self,url):
+        purl = urlparse(url)
+        if not purl.hostname == "jable.tv":
+             raise InvalidHost(purl.hostname)
+        t = Jtask(self.logger,url=purl,driver=self._driver,destDir=self.downloadDir)
+        self.tasks[t.name()] = t
+        self.taskq.put(t)
+        self.logger.info(f"add task {self.taskq.qsize()}/{len(self.tasks)} {url}")
+
+    def run_task(self):
+        self.logger.info("jtask thread ready")
+        while not self.stop.is_set():
+            try:
+                task = self.taskq.get(timeout=1)
+            except Empty as e :
+                pass
+            else:
+                self.logger.info(f"new task {task}")
+                task.run()
+                self.taskq.task_done()
+        while not self.taskq.empty():
+            t = self.taskq.get()
+            t.stop()
+
+    def close(self):
+        self.stop.set()
+
+
+class Jtask():
+    def __init__(self,url:ParseResult,driver,
+        logger=jlogger,downloadDir=''):
+        self._url = url
+        self.logger = logger
+        self._downloadDir = downloadDir
+        self._driver = driver
     
     def name(self):
-        name = self._url.split('/')[-2]
-        return name
+        items = self._url.path.split('/')
+        if len(items) > 1:
+            return items[-2]
+        raise InvalidUrlPath
 
     def destDir(self):
         return os.path.join(self._downloadDir,self.name())
-
+    
     async def run(self):
+        self.logger.inof(f"task {self.name()} running")
         destdir = self.destDir()
         if not os.path.exists(destdir):
             os.mkdir(destdir)
         
 
         
-class Jtask():
-    def __init__(self,logger,url,encode,destDir,executor):
+class Jtaskd():
+    def __init__(self,logger,url,driver,destDir,executor):
         self._url = url
         self._startTime = None
         self._endTime = None
-        self._encode = encode
+        self._driver = driver # headless browser
         self._destDir = destDir
         self._tsList = []
         self._m3u8url = ""
