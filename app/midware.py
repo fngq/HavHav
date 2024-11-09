@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI,Request
+from fastapi.middleware.gzip import GZipMiddleware
 
 
 async def auth(request:Request,call_next):

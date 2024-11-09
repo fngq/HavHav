@@ -1,12 +1,12 @@
 import os
 import logging
-from jable.jable import Jmanager,Jtask
+from .jable.jable import Jmanager,Jtask
 from fastapi import APIRouter, FastAPI,Request
 from starlette.responses import FileResponse 
 from fastapi import status, HTTPException
 from fastapi.staticfiles import StaticFiles
 
-from midware import init_midware
+from .midware import init_midware
 
 logger = logging.getLogger("app")
 logger.setLevel(logging.DEBUG)
