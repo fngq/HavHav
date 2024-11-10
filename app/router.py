@@ -1,21 +1,44 @@
-from fastapi import APIRouter, FastAPI
-from jable.jable import Jmanager
+# -*- coding: utf-8 -*-
+from fastapi import APIRouter, FastAPI,Request,HTTPException,status
+import traceback
+from .jable.jable import Jmanager,Jtask
+from contextlib import asynccontextmanager
+import logging
+
+logger = logging.getLogger("app")
+logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter(
+    "%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s",datefmt='%Y-%m-%d,%H:%M:%S'
+)
+ch = logging.StreamHandler()
+ch.setFormatter(formatter)
+logger.addHandler(ch) 
+
+StaticPath = "./static"
+
+manager = Jmanager(logger,downloadDir="./downloads")
+
+@asynccontextmanager
+async def lifespan(app:FastAPI):
+    manager.init()
+    yield
+    logger.info("router closing")
+    manager.close()
 
 router = APIRouter(
     prefix='/task',
-    tags=['task']
+    tags=['task'],
+    lifespan = lifespan,
 )
-
-
-manager = Jmanager(logger,StaticPath)
-
 
 @router.get("/add")
 async def add_task(request:Request,url:str):
+    url = url.strip()
     logger.info(f"add task {url}")
     try:
-        manager.CreateTask(url,0)
+        ret = manager.add_task(url)
     except Exception as e :
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail = str(e),
@@ -24,7 +47,8 @@ async def add_task(request:Request,url:str):
 
 @router.get("/list")
 async def list_task(request:Request):
-    tasks = manager.Tasks()
+    logger.info("task list")
+    tasks = manager.task_list()
     return tasks
 
 @router.get("/stop")
@@ -32,7 +56,7 @@ async def stop_task(request:Request,url:str):
     ret = manager.StopTask(url)
     return {"code":1,"msg":ret}
 
-@router.get("/list")
+@router.get("/flist")
 async def file_list(request:Request):
     files = os.listdir(StaticPath)
     dirs = []
@@ -51,12 +75,5 @@ async def file_list(request:Request):
     return dirs
 
 
-
-def router_v1():
-    v = APIRouter(prefix='v1')
-    v.include_router(router, tags=['Task'])
-    return v
-
-
 def init_routers(app: FastAPI):
-    app.include_router(router_v1(), prefix='/api', tags=['v1'])
+    app.include_router(router, prefix='/api', tags=['v1'])

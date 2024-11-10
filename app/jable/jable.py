@@ -54,7 +54,12 @@ class Jmanager():
         self.stop = Event()
 
         self._driver = None
+
+    def init(self):
         self._initDriver()
+
+    def dirName(self):
+        return self.downloadDir
 
     def _initDriver(self):
         #配置Selenium參數
@@ -76,15 +81,26 @@ class Jmanager():
     def load_history(self):
         folder = self.downloadDir
 
+    def task_list(self):
+        return [v for v in self.tasks.values()]
 
     def add_task(self,url):
         purl = urlparse(url)
         if not purl.hostname == "jable.tv":
              raise InvalidHost(purl.hostname)
-        t = Jtask(self.logger,url=purl,driver=self._driver,destDir=self.downloadDir)
+        t = Jtask(logger=self.logger,url=purl,driver=self._driver,downloadDir=self.downloadDir)
         self.tasks[t.name()] = t
         self.taskq.put(t)
         self.logger.info(f"add task {self.taskq.qsize()}/{len(self.tasks)} {url}")
+        return 1
+    
+    def stop_task(self,name):
+        if name not in self.tasks :
+            return 0
+        t = self.tasks[name]
+        
+        t.stop()
+        return 1
 
     def run_task(self):
         self.logger.info("jtask thread ready")
@@ -106,8 +122,7 @@ class Jmanager():
 
 
 class Jtask():
-    def __init__(self,url:ParseResult,driver,
-        logger=jlogger,downloadDir=''):
+    def __init__(self,url:ParseResult,driver,logger=jlogger,downloadDir=''):
         self._url = url
         self.logger = logger
         self._downloadDir = downloadDir
