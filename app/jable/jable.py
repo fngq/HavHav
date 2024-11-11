@@ -95,6 +95,7 @@ class Jmanager():
         ts = [] 
         for k,v in self.tasks.items():
             ts.append(v.desc())
+        ts.reverse()
         return ts
 
     def add_task(self,url):
@@ -119,6 +120,20 @@ class Jmanager():
         
         t.stop()
         return 1
+
+    # clean temprary files created during download
+    def clean_task(self,name):
+        if name not in self.tasks:
+            return 0
+        t = self.tasks[name]
+        t.clean()
+        return 1
+
+    def remove_task(self,name):
+        if name not in self.tasks:
+            return 0
+        t = self.tasks[name]
+        return r.remove()
 
     def run_task(self):
         self.logger.debug(f"jtask thread ready in thread {threading.get_ident()}")
@@ -148,7 +163,7 @@ def retry(
     max_attempts: int = 3,
     exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = Exception,
     delay: float = 1.0,
-    logger = None
+    logger = jlogger
 ):
     """
     重试装饰器
@@ -209,7 +224,7 @@ class Jtask():
         options.add_experimental_option('excludeSwitches', ['enable-automation']) # 禁用浏览器正在被自动化程序控制的提示
         options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--disable-extensions')
-        # options.add_argument('--headless')
+        options.add_argument('--headless')
         options.add_argument('blink-settings=imagesEnabled=false') # 禁止加载图片
         options.add_argument('user-agent=' + ua)
         options.add_experimental_option("prefs", {
@@ -306,7 +321,9 @@ class Jtask():
             vt = iv.replace("0x", "")[:16].encode()  # IV取前16位
             ci = AES.new(m3key, AES.MODE_CBC, vt)  # 建構解碼器
         
+        self.save_metainfo()
         self.check_cancel()
+        
         tsdir= os.path.join(self.destDir(),"ts")
         if not os.path.exists(tsdir):
             os.mkdir(tsdir)
@@ -350,7 +367,7 @@ class Jtask():
         self.downloadinfo['cover_url'] = cover_url
         # download cover
         dest = os.path.join(destdir,f"{self.name()}.jpg")
-        self.metainfo['cover_url'] = dest
+        self.metainfo['cover'] = dest
         self.download(cover_url,dest)
         self.save_metainfo()
         # get m3u8 file
@@ -378,11 +395,13 @@ class Jtask():
             self.status = TaskStatus.Finished
         except TaskCanceled as e :
             self.logger.warning(f"task {self.name()} canceled")
+            self.save_metainfo()
             return 
         except Exception as e :
             self.status = TaskStatus.Failed
             traceback.print_exc()
             self.logger.error(f"task fialed {e}")
+        self.save_metainfo()
 
     def check_cancel(self):
         if self.status == TaskStatus.Canceled :
@@ -391,6 +410,18 @@ class Jtask():
     def stop(self):
         self.status = TaskStatus.Canceled
         self.save_metainfo()
+    
+    # clean temprary files created during download
+    def clean(self):
+        d = self.destDir()
+        os.rmdir(os.path.join(d,"ts"))
+        return 1
+
+    # remove all files downloaded
+    def remove(self):
+        d = self.destDir()
+        os.rmdir(d)
+        return 1
 
     def save_metainfo(self):
         try:
@@ -411,7 +442,11 @@ class Jtask():
         if 'total' in self.downloadinfo :
             d['total'] = self.downloadinfo['total']
             d['progress'] = self.downloadinfo['progress']
-        d['metainfo'] = self.metainfo
+        for k,v in self.metainfo.items():
+            d[k] = v
         if detail :
             d['downloadinfo'] = self.downloadinfo
+        for k,v in d.items():
+            if isinstance(v,str):
+                d[k] = v.lstrip('.')
         return d

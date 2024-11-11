@@ -1,4 +1,4 @@
-var http_get = function(url, params, callback) {
+var http_get = function (url, params, callback) {
     if (params) {
         const urlParams = new URLSearchParams(params).toString();
         url = url + "?" + urlParams
@@ -15,14 +15,14 @@ var http_get = function(url, params, callback) {
 
 }
 
-function add_task(callback){
+function add_task(callback) {
     let toadd = $("input#input_add_task").val();
     console.log(toadd);
     let url = "/api/task/add";
     $.getJSON(
-        url=url,
-        data={"url":toadd},
-        success = function(data){
+        url = url,
+        data = { "url": toadd },
+        success = function (data) {
             console.log(data)
             update_task_list();
         }
@@ -35,13 +35,12 @@ function task_list(callback) {
     http_get(url, null, callback)
 }
 
-function update_task_list(){
-    let cb = function(tasks){
+function update_task_list() {
+    let cb = function (tasks) {
         let javlist = $("#javlist")
         javlist.empty()
-        console.log(tasks)
         tasks.forEach(element => {
-            createRow(element)
+            javlist.append(createRow(element))
         });
     }
     task_list(cb);
@@ -53,90 +52,101 @@ function create_task(url, callback) {
 }
 function file_list(callback) {
     var url = "/api/file/list"
-    http_get(url, nill, callback)
+    http_get(url, null, callback)
 }
 function stop_task(url, taskurl, callback) {
     var url = "/api/task/stop";
     http_get(url, { "url": taskurl }, callback);
 }
-function createRow(task) {
-    // 获取容器
-    const container = document.getElementById('javlist');
-    // 创建行 div
-    const row = document.createElement('div');
-    row.className = 'row';
 
+function createRow(task) {
     // 创建图片
-    const img = document.createElement('img');
-    img.src = task.cover;
+    const img = $('<img></img>')
+    img.attr('src', task.cover)
 
     // 创建标题
-    const title = document.createElement('div');
-    title.className = 'title';
-    title.textContent = task.title;
+    const title = $('<div>')
+    title.attr('class', 'title')
+    title.text(task.title)
     if (!task.title) {
-        title.textContent = task.name
+        title.text(task.name)
     }
 
     // 创建进度条容器
-    const progressContainer = document.createElement('div');
-    progressContainer.className = 'progress-container';
-    strprogress = String(task.progress * 100)
+    const progressContainer = $('<div>')
+    progressContainer.attr('class', 'progress-container')
+    strprogress = String(task.progress / task.total * 100)
     // 创建进度条
-    const progress = document.createElement('div');
-    progress.className = 'progress';
-    progress.style.width = strprogress + '%'; // 设置进度条的宽度
+    const progress = $('<div>')
+    progress.attr('class', 'progress')
+    progress.css('width', strprogress + '%') // 设置进度条的宽度
 
     // 创建显示文字的元素
-    const progressText = document.createElement('div');
-    progressText.className = 'progress-text';
-    progressText.textContent = task.state; // 显示进度状态
+    const progressText = $('<div>')
+    progressText.attr('class', 'progress-text')
+    progressText.text(task.status) // 显示进度状态
 
-    progress.appendChild(progressText);
+    progress.append(progressText);
 
     // 将进度条放入进度条容器
-    progressContainer.appendChild(progress);
+    progressContainer.append(progress);
 
-    const protxt = document.createElement('div')
-    protxt.className = 'progress-str'
-    protxt.textContent = String(Math.floor(task.progress * 10000) / 100) + '%'
+    const protxt = $('<div>')
+    protxt.attr('class', 'progress-str')
+    protxt.text(String(Math.floor(task.progress/task.total * 10000) / 100) + '%')
 
     // 创建 "stop" 按钮
-    const stopButton = document.createElement('button');
-    stopButton.textContent = 'Stop';
-    stopButton.onclick = () => alert('Stopped');
+    const stopButton = $('<button>')
+        .text('Stop')
+        .on('click', () => alert('Stopped'))
 
     // 创建 "下载" 链接
-    const download = document.createElement('a');
-    download.href = task.file;
-    download.textContent = '下载';
-    download.target = '_blank'; // 在新标签页中打开链接
-
+    const download = $('<a>')
+        .attr('href', task.file)
+        .text('下载')
+        .attr('target', '_blank') // 在新标签页中打开链接
+    // 创建行 div
+    const row = $('<div class="row"></div>')
     // 将所有元素添加到行中
-    row.appendChild(img);
-    row.appendChild(title);
-    row.appendChild(progressContainer);
-    row.appendChild(protxt)
-    row.appendChild(stopButton);
-    row.appendChild(download);
+    row.append(img);
+    row.append(title);
+    row.append(progressContainer);
+    row.append(protxt)
+    row.append(stopButton);
+    row.append(download);
 
     // 将行元素添加到容器中
-    container.appendChild(row);
-}
+    return row;
+};
 
-var tlist = document.getElementById('javlist');
-task_list(function (tasks) {
-    console.log(tasks)
-    tasks.forEach(element => {
-        createRow(element)
+jQuery(function () {
+    $("button#btn_add_task").on("click", function () {
+        add_task();
     });
-});
+    update_task_list();
+    // 设置定时刷新
+    const refreshInterval = 2000; // 5秒刷新一次
+    let refreshTimer = setInterval(function () {
+        update_task_list();
+    }, refreshInterval);
 
-jQuery(function(){
-$("button#btn_add_task").on("click",function(){
-    console.log("btn clicked");
-    add_task();
-});
-console.log("document is ready")
+    // 当页面隐藏时暂停刷新，显示时恢复
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+            // 页面隐藏时清除定时器
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+                refreshTimer = null;
+            }
+        } else {
+            // 页面显示时重新启动定时器
+            if (!refreshTimer) {
+                update_task_list(); // 立即刷新一次
+                refreshTimer = setInterval(function () {
+                    update_task_list();
+                }, refreshInterval);
+            }
+        }
+    });
 
 });

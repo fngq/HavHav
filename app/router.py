@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 from fastapi import APIRouter, FastAPI,Request,HTTPException,status
+from fastapi.staticfiles import StaticFiles
 import traceback
 from .jable.jable import Jmanager,Jtask
 from contextlib import asynccontextmanager
 import logging
-
+import os
 logger = logging.getLogger("app")
 logger.setLevel(logging.INFO)
 
@@ -16,13 +17,16 @@ ch.setFormatter(formatter)
 logger.addHandler(ch) 
 
 StaticPath = "./static"
+DownloadPath = "./downloads" 
 
-manager = Jmanager(logger,downloadDir="./downloads")
+manager = Jmanager(logger,downloadDir=DownloadPath)
 
 router = APIRouter(
     prefix='/task',
     tags=['task'],
 )
+
+
 
 @router.on_event("startup")
 async def startup_event():
@@ -54,9 +58,19 @@ async def list_task(request:Request):
     return tasks
 
 @router.get("/stop")
-async def stop_task(request:Request,url:str):
-    ret = manager.stop_task(url)
+async def stop_task(request:Request,name:str):
+    ret = manager.stop_task(name)
     return {"code":1,"msg":ret}
+
+@router.get("/clean")
+async def clean(request:Request,name:str):
+    r = manager.clean_task(name)
+    return {"code":1,"msg":r}
+
+@router.get("/remove")
+async def remove(request:Request,name:str):
+    r = manager.remove_task(name)
+    return {"code":1,"msg":r}
 
 @router.get("/flist")
 async def file_list(request:Request):
@@ -79,3 +93,4 @@ async def file_list(request:Request):
 
 def init_routers(app: FastAPI):
     app.include_router(router, prefix='/api', tags=['v1'])
+    app.mount("/downloads", StaticFiles(directory=DownloadPath), name="downloads")
