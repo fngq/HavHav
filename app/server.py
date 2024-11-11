@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*- 
 
-from .jable.jable import Jmanager,Jtask
+from .jable import Jmanager,Jtask
 from fastapi import FastAPI
 from starlette.responses import FileResponse 
 from fastapi.staticfiles import StaticFiles
