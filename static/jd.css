@@ -35,23 +35,55 @@ html,body {
 }
 
 .add_task_bar {
-    margin-left: 40px;
-    margin-bottom: 20px;
-    display: flex;
-    height: 18px;
-}
-
-.marginl20 {
-    margin-left: 10px;
-}
-
-.row {
     display: flex;
     align-items: center;
-    padding: 10px;
-    border-bottom: 1px solid #ccc;
-    margin-bottom: 10px;
-    background-color: #f1f1f1;
+    padding: 20px;
+    background: #f5f5f5;
+    border-radius: 8px;
+    margin: 20px 0;
+}
+
+.task-label {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+    margin-right: 15px;
+}
+
+.task-input {
+    flex: 1;
+    padding: 10px 15px;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: border-color 0.3s ease;
+}
+
+.task-input:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 5px rgba(74, 144, 226, 0.3);
+}
+
+.task-button {
+    padding: 10px 20px;
+    margin-left: 15px;
+    background-color: #4a90e2;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.task-button:hover {
+    background-color: #357abd;
+}
+
+.task-button:active {
+    background-color: #2d6da3;
 }
 
 .row img {
@@ -60,19 +92,31 @@ html,body {
     margin-right: 15px;
 }
 
-.row .title {
+.row  {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    gap: 10px;  /* 元素之间的间距 */
+}
+
+.title {
     flex-grow: 1;
     font-size: 20px;
     margin-right: 15px;
     overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    text-overflow: ellipsis;
 }
 
 .progress-container {
-    width: 160px;
-    background-color: #d1d1d1;
-    border-radius: 10px;
+    width: 160px;  /* 固定进度条容器宽度 */
     height: 20px;
-    margin-right: 25px;
+    flex-shrink: 0;
+    background-color: #f0f0f0;
+    border-radius: 10px;
     overflow: hidden;
 }
 
@@ -93,12 +137,12 @@ html,body {
 }
 
 .progress-str {
-    margin-right: 15px;
-    width: 100px;
+    width: 60px;  /* 固定百分比文字宽度 */
+    flex-shrink: 0;
+    text-align: right;
 }
 
 .row button {
-    margin-right: 15px;
     padding: 5px 10px;
     cursor: pointer;
 }
@@ -107,4 +151,10 @@ html,body {
     color: blue;
     text-decoration: none;
     margin-right: 20px;
+}
+
+button, a {
+    flex-shrink: 0;
+    min-width: 60px;  /* 按钮最小宽度 */
+    text-align: center;
 }

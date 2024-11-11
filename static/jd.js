@@ -67,10 +67,8 @@ function createRow(task) {
     // 创建标题
     const title = $('<div>')
     title.attr('class', 'title')
-    title.text(task.title)
-    if (!task.title) {
-        title.text(task.name)
-    }
+    title.text(task.title || task.name)
+    title.attr('title', task.title || task.name)  // 添加悬停提示
 
     // 创建进度条容器
     const progressContainer = $('<div>')
@@ -104,7 +102,11 @@ function createRow(task) {
     const download = $('<a>')
         .attr('href', task.file)
         .text('下载')
-        .attr('target', '_blank') // 在新标签页中打开链接
+        .attr('target', '_blank')
+        .css({
+            'white-space': 'nowrap',
+            'flex-shrink': '0'  // 防止元素被压缩
+        })
     // 创建行 div
     const row = $('<div class="row"></div>')
     // 将所有元素添加到行中
