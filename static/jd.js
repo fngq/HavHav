@@ -127,7 +127,7 @@ jQuery(function () {
     });
     update_task_list();
     // 设置定时刷新
-    const refreshInterval = 2000; // 5秒刷新一次
+    const refreshInterval = 5000; // 5秒刷新一次
     let refreshTimer = setInterval(function () {
         update_task_list();
     }, refreshInterval);
