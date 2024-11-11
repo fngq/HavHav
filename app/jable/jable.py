@@ -14,12 +14,7 @@ from Crypto.Util.Padding import pad,unpad
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-
 import logging
-from bs4 import BeautifulSoup
-from functools import partial
-
-import asyncio
 
 import threading
 from collections import OrderedDict

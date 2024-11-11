@@ -100,13 +100,20 @@ function createRow(task) {
 
     // 创建 "下载" 链接
     const download = $('<a>')
-        .attr('href', task.file)
+        .attr('href', task.video_url)
         .text('下载')
         .attr('target', '_blank')
         .css({
             'white-space': 'nowrap',
             'flex-shrink': '0'  // 防止元素被压缩
         })
+    // 只在有URL时添加href属性
+    if (task.video_url) {
+        download.attr('href', task.video_url)
+    } else {
+        download.css('pointer-events', 'none')  // 禁用点击
+            .attr('title', '下载链接暂未生成')  // 添加提示文字
+    }
     // 创建行 div
     const row = $('<div class="row"></div>')
     // 将所有元素添加到行中
