@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from fastapi import APIRouter, FastAPI,Request,HTTPException,status,FileResponse
+from fastapi import APIRouter, FastAPI,Request,HTTPException,status
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import traceback
 from .jable.jable import Jmanager,Jtask
@@ -90,8 +91,10 @@ async def file_list(request:Request):
             dirs.append(d)
     return dirs
 
-@router.get(f"{DownloadPath.lstrip('.')}/{file_path:path}")
+filerouter = APIRouter()
+@filerouter.get("/{file_path:path}")
 async def srvfile(file_path: str):
+    logger.debug(f"serve file {file_path}")
     response = FileResponse(f"{DownloadPath}/{file_path}")
     cd = f"attachment; filename={file_path.split('/')[-1]}"
     response.headers["Content-Disposition"] = cd 
@@ -99,4 +102,5 @@ async def srvfile(file_path: str):
 
 def init_routers(app: FastAPI):
     app.include_router(router, prefix='/api', tags=['v1'])
+    app.include_router(filerouter,prefix=DownloadPath.lstrip('.'))
     # app.mount("/downloads", StaticFiles(directory=DownloadPath), name="downloads")
