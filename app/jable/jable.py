@@ -276,8 +276,6 @@ class Jtask():
 
     def _get_m3u8(self,m3u8_url:str):
         # find m3u8 in javascript 
-        # https://ap-drop-monst.mushroomtrack.com/bcdn_token=5WemB68GLWB06KD7m7PWGyfIcYwoSqg6rCMbR9frcf4&expires=1731245965&token_path=%2Fvod%2F/vod/16000/16752/16752.m3u8
-        # https://ap-drop-monst.mushroomtrack.com/bcdn_token=5WemB68GLWB06KD7m7PWGyfIcYwoSqg6rCMbR9frcf4&expires=1731245965&token_path=%2Fvod%2F/vod/16000/16752/167520.ts
         self.downloadinfo['m3u8_url'] = m3u8_url
         
         self.check_cancel()
