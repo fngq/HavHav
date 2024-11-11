@@ -6,7 +6,8 @@ from contextlib import asynccontextmanager
 import logging
 
 logger = logging.getLogger("app")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
+
 formatter = logging.Formatter(
     "%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s",datefmt='%Y-%m-%d,%H:%M:%S'
 )
@@ -18,18 +19,20 @@ StaticPath = "./static"
 
 manager = Jmanager(logger,downloadDir="./downloads")
 
-@asynccontextmanager
-async def lifespan(app:FastAPI):
-    manager.init()
-    yield
-    logger.info("router closing")
-    manager.close()
-
 router = APIRouter(
     prefix='/task',
     tags=['task'],
-    lifespan = lifespan,
 )
+
+@router.on_event("startup")
+async def startup_event():
+    logger.info("router startup")
+    manager.init()
+
+@router.on_event("shutdown")
+async def shutdown_event():
+    logger.info("router closing")
+    manager.close()
 
 @router.get("/add")
 async def add_task(request:Request,url:str):
@@ -43,17 +46,16 @@ async def add_task(request:Request,url:str):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail = str(e),
         )
-    return {"code":1,"msg":"ok","url":url}
+    return {"code":1,"msg":"ok","url":url,"result":ret}
 
 @router.get("/list")
 async def list_task(request:Request):
-    logger.info("task list")
     tasks = manager.task_list()
     return tasks
 
 @router.get("/stop")
 async def stop_task(request:Request,url:str):
-    ret = manager.StopTask(url)
+    ret = manager.stop_task(url)
     return {"code":1,"msg":ret}
 
 @router.get("/flist")
