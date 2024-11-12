@@ -26,10 +26,58 @@ from enum import Enum
 from fake_useragent import UserAgent
 import traceback
 from dataclasses import dataclass
+from typing import OrderedDict as TOrderedDict
+import base64
  
 ua = UserAgent().random
 
 header = {"User-Agent":ua}
+
+def retry(
+    max_attempts: int = 3,
+    exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = Exception,
+    delay: float = 1.0,
+    logger = jlogger
+):
+    """
+    重试装饰器
+    Args:
+        max_attempts: 最大重试次数
+        exceptions: 需要重试的异常类型
+        delay: 初始延迟时间（秒）
+        logger: 日志记录器
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            _delay = delay
+            last_exception = None
+            
+            for attempt in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                    
+                except exceptions as e:
+                    last_exception = e
+                    if logger:
+                        logger.warning(
+                            f"Attempt {attempt + 1}/{max_attempts} failed for {func.__name__}: {str(e)}"
+                        )
+                    
+                    if attempt < max_attempts - 1:  # 不是最后一次尝试
+                        if logger:
+                            logger.info(f"Retrying in {_delay:.1f} seconds...")
+                        time.sleep(_delay)
+                        
+            # 所有重试都失败后
+            if logger:
+                logger.error(
+                    f"All {max_attempts} attempts failed for {func.__name__}"
+                )
+            raise last_exception
+            
+        return wrapper
+    return decorator
 
 # inherit from str to help json encode
 class TaskStatus(str,Enum):
@@ -40,11 +88,37 @@ class TaskStatus(str,Enum):
     Canceled = 'Canceled'
 
 @dataclass
-class TaskModel:
-    name = ''
-    url = ''
-    title = ''
-    total = Optional[int]
+class TaskInfo:
+    name: str = ''                    # 任务名称（从URL中提取）
+    url: str = ''                     # 完整的URL
+    title: str = ''                   # 视频标题
+    status: TaskStatus = TaskStatus.Pending  # 任务状态
+    total: Optional[int] = None       # 总分片数
+    progress: Optional[int] = None    # 当前下载进度
+    start_time: Optional[int] = None  # 开始时间戳
+    finish_time: Optional[int] = None # 完成时间戳
+    cover_url: Optional[str] = None   # 封面图片原始url
+    cover: Optional[str] = None       # 封面图片本地路径
+    video_url: Optional[str] = None   # 视频文件路径
+
+    def to_dict(self) -> dict:
+        """转换为字典,用于JSON序列化"""
+        return {k: v for k, v in self.__dict__.items() if v is not None}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> TaskSnapshot:
+        """从字典创建实例,用于从JSON反序列化"""
+        if 'status' in data:
+            data['status'] = TaskStatus(data['status'])
+        return cls(**data)
+
+@dataclass
+class DownloadInfo:
+    m3u8_url: str = ''
+    m3u8_file: str = ''
+    m3u8_key_url: str = ''
+    m3u8_key:str = '' # base64
+    m3u8_iv: str = ''
 
 
 class InvalidHost(Exception):
@@ -75,8 +149,8 @@ class Jmanager():
     def __init__(self,logger = jlogger,downloadDir = "./downloads",workers = 2):
         self.logger = logger
         self.downloadDir = downloadDir
-        self.tasks = OrderedDict()
-        self.taskq = Queue()
+        self.tasks : TOrderedDict[str,Jtask] = OrderedDict()
+        self.taskq = Queue(maxsize=10) # 任务队列
         self.max_worker = workers
         self.executer = ThreadPoolExecutor(max_workers=workers)
         self.stop = threading.Event()
@@ -184,62 +258,15 @@ class Jmanager():
         self.executer.shutdown(wait=False)
         self.executer = None
 
-def retry(
-    max_attempts: int = 3,
-    exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = Exception,
-    delay: float = 1.0,
-    logger = jlogger
-):
-    """
-    重试装饰器
-    Args:
-        max_attempts: 最大重试次数
-        exceptions: 需要重试的异常类型
-        delay: 初始延迟时间（秒）
-        logger: 日志记录器
-    """
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            _delay = delay
-            last_exception = None
-            
-            for attempt in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                    
-                except exceptions as e:
-                    last_exception = e
-                    if logger:
-                        logger.warning(
-                            f"Attempt {attempt + 1}/{max_attempts} failed for {func.__name__}: {str(e)}"
-                        )
-                    
-                    if attempt < max_attempts - 1:  # 不是最后一次尝试
-                        if logger:
-                            logger.info(f"Retrying in {_delay:.1f} seconds...")
-                        time.sleep(_delay)
-                        
-            # 所有重试都失败后
-            if logger:
-                logger.error(
-                    f"All {max_attempts} attempts failed for {func.__name__}"
-                )
-            raise last_exception
-            
-        return wrapper
-    return decorator
 
 class Jtask():
-    def __init__(self,url:ParseResult,logger=jlogger,downloadDir=''):
+    def __init__(self,url:str,logger=jlogger,downloadDir=''):
         self._url = url
         self.logger = logger
         self._downloadDir = downloadDir
-
-        self.status = TaskStatus.Pending
-        self.metainfo = {}
-        self.downloadinfo = {}
-        self.session = requests.sessions.Session()
+        self.info = TaskInfo()
+        self.downloadinfo = DownloadInfo()
+        self._session = requests.sessions.Session()
     
     def _initDriver(self):
         #配置Selenium參數
@@ -260,6 +287,7 @@ class Jtask():
             })
         dr = webdriver.Chrome(options = options)
         return dr
+
     @property
     def destDir(self):
         return os.path.join(self._downloadDir,self.name)
@@ -268,22 +296,29 @@ class Jtask():
         return os.path.join(self.destDir,'meta.json')
     @property
     def url(self):
-        l = self._url.geturl()
-        return l
+        return self._url
+    @property
+    def status(self):
+        return self.info.status
 
+    def set_status(self,status):
+        self.info.status = status
     # get name from url
     @property
     def name(self):
-        items = self._url.path.split('/')
-        if len(items) > 1:
-            return items[-2]
-        raise InvalidUrlPath
+        if not self.info.name:
+            items = urlparse(self.url).path.split('/')
+            if len(items) > 1:
+                self.info.name = items[-2]
+            else :
+                raise InvalidUrlPath
+        return self.info.name
     
     @retry(max_attempts=5,exceptions=(ConnectionResetError,requests.exceptions.ConnectionError))
     def download(self,url,dest='',force = False):
         if not force and dest and os.path.exists(dest):
             return 
-        content = self.session.get(url,headers = header).content
+        content = self._session.get(url,headers = header).content
         if dest :
             with open(dest,"wb+") as f :
                 f.write(content)
@@ -293,22 +328,23 @@ class Jtask():
     def download_ts(self,url,dest,ci,force=False):
         if not force and os.path.exists(dest):
             return 
-        content = self.session.get(url,headers = header).content
+        content = self._session.get(url,headers = header).content
         if ci :
             content = ci.decrypt(content)
             content = unpad(content,AES.block_size)
         with open(dest,'wb+') as f :
             f.write(content)
+        return content
 
     def _get_m3u8(self,m3u8_url:str):
         # find m3u8 in javascript 
-        self.downloadinfo['m3u8_url'] = m3u8_url
+        self.downloadinfo.m3u8_url = m3u8_url
         
         self.check_cancel()
 
         m3u8file = os.path.join(self.destDir,f"{self.name}.m3u8")
         self.download(m3u8_url,m3u8file,force=True)
-        self.downloadinfo['m3u8_file'] = m3u8file
+        self.downloadinfo.m3u8_file = m3u8file
         self.check_cancel()
         m3obj = m3u8.load(m3u8_url)
         if not m3obj.segments :
@@ -316,19 +352,22 @@ class Jtask():
         
         self.check_cancel()
         tslist =[seg.absolute_uri for seg in m3obj.segments]
-        self.downloadinfo['progress'] = 0
-        self.downloadinfo['total'] = len(tslist)
+        self.info.progress = 0
+        self.info.total = len(tslist)
 
         self.logger.debug(f"tslis {len(tslist)},{tslist[:1]}")
         tsuri,iv = m3obj.keys[-1].uri[:16] ,m3obj.keys[-1].iv
+        self.downloadinfo.m3u8_iv = iv
 
         ci = None
         
         if tsuri:
             m3kurl = m3obj.segments[0].base_uri + tsuri + ".ts"  # 得到 key 的網址
+            self.downloadinfo.m3u8_key_url = m3kurl
             self.logger.debug(f"m3u8 key url {m3kurl}")
             # 得到 key的內容
             m3key = self.download(m3kurl)
+            self.downloadinfo.m3u8_key = base64.encodebytes(m3key).hex()
             vt = iv.replace("0x", "")[:16].encode()  # IV取前16位
             ci = AES.new(m3key, AES.MODE_CBC, vt)  # 建構解碼器
         
@@ -346,7 +385,7 @@ class Jtask():
             dest = os.path.join(tsdir,name)
             self.download_ts(ts,dest,ci)
             tsfiles.append(dest)
-            self.downloadinfo['progress'] += 1
+            self.info.progress += 1
 
         videopath = os.path.join(self.destDir,f"{self.name}.mp4")
         with open(videopath,"wb") as v:
@@ -357,7 +396,7 @@ class Jtask():
                 os.remove(ts)
             os.rmdir(tsdir)
         self.logger.info("mp4 file created")
-        self.metainfo['video_url'] = videopath
+        self.info.video_url = videopath
          
 
     def _run(self):
@@ -366,19 +405,18 @@ class Jtask():
             self.logger.debug(f"mkdir {destdir}")
             os.mkdir(destdir)
         self.check_cancel()
+
         dr = self._initDriver()
         dr.get(self.url)
-        
         self.check_cancel()
-
         # get title and cover
         title = dr.find_element(By.XPATH,"//meta[@property='og:title']").get_attribute("content")
         cover_url = dr.find_element(By.XPATH,"//meta[@property='og:image']").get_attribute("content")
-        self.metainfo['title'] = title
-        self.downloadinfo['cover_url'] = cover_url
+        self.info.title = title
+        self.info.cover_url = cover_url
         # download cover
         dest = os.path.join(destdir,f"{self.name}.jpg")
-        self.metainfo['cover'] = dest
+        self.info.cover = dest
         self.download(cover_url,dest)
         self.save_metainfo()
         # get m3u8 file
@@ -397,19 +435,18 @@ class Jtask():
 
     def run(self):
         self.logger.info(f"task {self.name} running")
-        self.metainfo['start_time'] = int(time.time())
-        self.status = TaskStatus.Running
+        self.info.start_time = int(time.time())
+        self.set_status(TaskStatus.Running)
         try:
-            self._try_load()
             self._run()
-            self.metainfo["finish_time"] = int(time.time())
-            self.status = TaskStatus.Finished
+            self.info.finish_time = int(time.time())
+            self.set_status(TaskStatus.Finished)
         except TaskCanceled as e :
             self.logger.warning(f"task {self.name} canceled")
             self.save_metainfo()
             return 
         except Exception as e :
-            self.status = TaskStatus.Failed
+            self.set_status(TaskStatus.Failed)
             traceback.print_exc()
             self.logger.error(f"task fialed {e}")
         self.save_metainfo()
@@ -419,7 +456,7 @@ class Jtask():
             raise TaskCanceled
 
     def stop(self):
-        self.status = TaskStatus.Canceled
+        self.set_status(TaskStatus.Canceled)
         self.save_metainfo()
     
     # clean temprary files created during download
