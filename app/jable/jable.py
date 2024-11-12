@@ -25,6 +25,7 @@ from enum import Enum
 
 from fake_useragent import UserAgent
 import traceback
+from dataclasses import dataclass
  
 ua = UserAgent().random
 
@@ -38,7 +39,13 @@ class TaskStatus(str,Enum):
     Failed = 'Failed'
     Canceled = 'Canceled'
 
-    
+@dataclass
+class TaskModel:
+    name = ''
+    url = ''
+    title = ''
+    total = Optional[int]
+
 
 class InvalidHost(Exception):
     def __init__(self,host):
@@ -79,6 +86,29 @@ class Jmanager():
         self.logger.debug(f"jmanager thread {threading.get_ident()}")
         for i in range(self.max_worker):
             self.executer.submit(self.run_task)
+    
+    def load_history(self):
+        tasks = []
+        for item in os.scandir(self.downloadDir):
+            if not item.is_dir():
+                continue
+            task = self.load_task(item.path)
+            if task :
+                tasks.append(task)
+        tasks.sort()
+            
+    def load_task(self,path):
+        metapath = os.path.join(path,"meta.json")
+        if not os.path.exists(metapath):
+            return None
+        with open(metapath) as f :
+            metainfo = json.load(f)
+            t = Jtask(None,downloadDir=self.downloadDir)
+            t.undesc(metainfo)
+            return t
+
+
+
 
     def dirName(self):
         return self.downloadDir
@@ -223,49 +253,35 @@ class Jtask():
         options.add_argument('blink-settings=imagesEnabled=false') # 禁止加载图片
         options.add_argument('user-agent=' + ua)
         options.add_experimental_option("prefs", {
-            "download.default_directory": self.destDir(),
+            "download.default_directory": self.destDir,
             "download.prompt_for_download": False,
             "download.directory_upgrade": True,
             "safebrowsing.enabled": True
             })
         dr = webdriver.Chrome(options = options)
         return dr
-
-    def _meta_file(self):
-        return os.path.join(self.destDir(),'meta.json')
-    
-    def _try_load(self):
-        try:
-            metafile = self._meta_file()
-            if not os.path.exists(metafile):        
-                return 
-            with open(metafile) as f:
-                d = json.load(f)
-                self._url = urlparse(d.get("url",''))
-                self.metainfo = d.get("metainfo",{})
-                self.downloadinfo = d.get("downloadinfo",{})
-        except Exception as e :
-            traceback.print_exc()
-            self.logger.info("try load metainfo failed")
-        
-
+    @property
+    def destDir(self):
+        return os.path.join(self._downloadDir,self.name)
+    @property
+    def metafile(self):
+        return os.path.join(self.destDir,'meta.json')
+    @property
     def url(self):
         l = self._url.geturl()
         return l
 
+    # get name from url
+    @property
     def name(self):
         items = self._url.path.split('/')
         if len(items) > 1:
             return items[-2]
         raise InvalidUrlPath
-
-    def destDir(self):
-        return os.path.join(self._downloadDir,self.name())
     
     @retry(max_attempts=5,exceptions=(ConnectionResetError,requests.exceptions.ConnectionError))
     def download(self,url,dest='',force = False):
         if not force and dest and os.path.exists(dest):
-            self.logger.info(f"download {dest} exists,skip.")
             return 
         content = self.session.get(url,headers = header).content
         if dest :
@@ -273,10 +289,10 @@ class Jtask():
                 f.write(content)
         return content
 
-    @retry(max_attempts=5,exceptions=(ConnectionResetError,requests.exceptions.ConnectionError))
+    @retry(max_attempts=5,exceptions=(ConnectionResetError,requests.exceptions.ConnectionError,ValueError))
     def download_ts(self,url,dest,ci,force=False):
         if not force and os.path.exists(dest):
-            return 1
+            return 
         content = self.session.get(url,headers = header).content
         if ci :
             content = ci.decrypt(content)
@@ -290,7 +306,7 @@ class Jtask():
         
         self.check_cancel()
 
-        m3u8file = os.path.join(self.destDir(),f"{self.name()}.m3u8")
+        m3u8file = os.path.join(self.destDir,f"{self.name}.m3u8")
         self.download(m3u8_url,m3u8file,force=True)
         self.downloadinfo['m3u8_file'] = m3u8file
         self.check_cancel()
@@ -303,14 +319,14 @@ class Jtask():
         self.downloadinfo['progress'] = 0
         self.downloadinfo['total'] = len(tslist)
 
-        self.logger.info(f"tslis {len(tslist)},{tslist[:1]}")
+        self.logger.debug(f"tslis {len(tslist)},{tslist[:1]}")
         tsuri,iv = m3obj.keys[-1].uri[:16] ,m3obj.keys[-1].iv
 
         ci = None
         
         if tsuri:
             m3kurl = m3obj.segments[0].base_uri + tsuri + ".ts"  # 得到 key 的網址
-            self.logger.info(f"m3u8 key url {m3kurl}")
+            self.logger.debug(f"m3u8 key url {m3kurl}")
             # 得到 key的內容
             m3key = self.download(m3kurl)
             vt = iv.replace("0x", "")[:16].encode()  # IV取前16位
@@ -319,7 +335,7 @@ class Jtask():
         self.save_metainfo()
         self.check_cancel()
         
-        tsdir= os.path.join(self.destDir(),"ts")
+        tsdir= os.path.join(self.destDir,"ts")
         if not os.path.exists(tsdir):
             os.mkdir(tsdir)
         tsfiles = []
@@ -332,7 +348,7 @@ class Jtask():
             tsfiles.append(dest)
             self.downloadinfo['progress'] += 1
 
-        videopath = os.path.join(self.destDir(),f"{self.name()}.mp4")
+        videopath = os.path.join(self.destDir,f"{self.name}.mp4")
         with open(videopath,"wb") as v:
             for ts in tsfiles:
                 self.check_cancel()
@@ -345,13 +361,13 @@ class Jtask():
          
 
     def _run(self):
-        destdir = self.destDir()
+        destdir = self.destDir
         if not os.path.exists(destdir):
             self.logger.debug(f"mkdir {destdir}")
             os.mkdir(destdir)
         self.check_cancel()
         dr = self._initDriver()
-        dr.get(self.url())
+        dr.get(self.url)
         
         self.check_cancel()
 
@@ -361,7 +377,7 @@ class Jtask():
         self.metainfo['title'] = title
         self.downloadinfo['cover_url'] = cover_url
         # download cover
-        dest = os.path.join(destdir,f"{self.name()}.jpg")
+        dest = os.path.join(destdir,f"{self.name}.jpg")
         self.metainfo['cover'] = dest
         self.download(cover_url,dest)
         self.save_metainfo()
@@ -380,7 +396,7 @@ class Jtask():
        
 
     def run(self):
-        self.logger.info(f"task {self.name()} running")
+        self.logger.info(f"task {self.name} running")
         self.metainfo['start_time'] = int(time.time())
         self.status = TaskStatus.Running
         try:
@@ -389,7 +405,7 @@ class Jtask():
             self.metainfo["finish_time"] = int(time.time())
             self.status = TaskStatus.Finished
         except TaskCanceled as e :
-            self.logger.warning(f"task {self.name()} canceled")
+            self.logger.warning(f"task {self.name} canceled")
             self.save_metainfo()
             return 
         except Exception as e :
@@ -408,32 +424,29 @@ class Jtask():
     
     # clean temprary files created during download
     def clean(self):
-        d = self.destDir()
+        d = self.destDir
         os.rmdir(os.path.join(d,"ts"))
         return 1
 
     # remove all files downloaded
     def remove(self):
-        d = self.destDir()
+        d = self.destDir
         os.rmdir(d)
         return 1
 
     def save_metainfo(self):
         try:
-            destdir = self.destDir()
-            file = os.path.join(destdir,"meta.json")
-            
             data = self.desc(detail=True)
             datastr = json.dumps(data,indent=2,ensure_ascii=False)
-            with open(file,"w+",encoding='utf-8') as f :
+            with open(self.metafile,"w+",encoding='utf-8') as f :
                 f.write(datastr)
                 f.flush()
         except Exception as e :
             self.logger.error(f"save metainfo failed: {e}")
 
-
+    # convert task to description obj
     def desc(self,detail = False):
-        d = {"name":self.name(),"url":self.url(),"status":self.status}
+        d = {"name":self.name,"url":self.url,"status":self.status}
         if 'total' in self.downloadinfo :
             d['total'] = self.downloadinfo['total']
             d['progress'] = self.downloadinfo['progress']
@@ -445,3 +458,23 @@ class Jtask():
             if isinstance(v,str):
                 d[k] = v.lstrip('.')
         return d
+
+    # fill task with description obj
+    def undesc(self,data):
+        self._url = urlparse(data.get("url",''))
+        self.status = TaskStatus(data.get("status"))
+        
+
+    def load_from_file(self,dirname):
+        try:
+            metafile = os.path.join(dirname,"meta.json")
+            if not os.path.exists(dirname) or not os.path.exists(metafile):        
+                return 0
+            with open(metafile) as f:
+                d = json.load(f)
+                return self.undesc(d)
+        except Exception as e :
+            traceback.print_exc()
+            self.logger.info("try load metainfo failed")
+            return 0
+    
