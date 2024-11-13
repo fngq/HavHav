@@ -28,6 +28,9 @@ import traceback
 from dataclasses import dataclass
 from typing import OrderedDict as TOrderedDict
 import base64
+
+jlogger = logging.getLogger('jlog')
+jlogger.setLevel(logging.DEBUG)
  
 ua = UserAgent().random
 
@@ -106,7 +109,7 @@ class TaskInfo:
         return {k: v for k, v in self.__dict__.items() if v is not None}
 
     @classmethod
-    def from_dict(cls, data: dict) -> TaskSnapshot:
+    def from_dict(cls, data: dict) :
         """从字典创建实例,用于从JSON反序列化"""
         if 'status' in data:
             data['status'] = TaskStatus(data['status'])
@@ -141,9 +144,6 @@ def AESDecrypt(cipher_text, key, iv):
     cipher_text = aes.decrypt(cipher_text)
     # clear_text = unpad(padded_data=cipher_text, block_size=AES.block_size)
     return cipher_text
-
-jlogger = logging.getLogger('jlog')
-jlogger.setLevel(logging.DEBUG)
 
 class Jmanager():
     def __init__(self,logger = jlogger,downloadDir = "./downloads",workers = 2):
@@ -181,9 +181,6 @@ class Jmanager():
             t.undesc(metainfo)
             return t
 
-
-
-
     def dirName(self):
         return self.downloadDir
 
@@ -202,14 +199,13 @@ class Jmanager():
         if not purl.hostname == "jable.tv":
              raise InvalidHost(purl.hostname)
         
-        t = Jtask(logger=self.logger,url=purl,downloadDir=self.downloadDir)
-        if not t.name() in self.tasks :
-            self.tasks[t.name()] = t
+        t = Jtask(logger=self.logger,url=url,downloadDir=self.downloadDir)
+        if not t.name in self.tasks :
+            self.tasks[t.name] = t
         if t.status != TaskStatus.Running:
             self.taskq.put(t)
         
-        
-        self.logger.info(f"add task {self.taskq.qsize()}/{len(self.tasks)} {t.name()}")
+        self.logger.info(f"add task {self.taskq.qsize()}/{len(self.tasks)} {t.name}")
         return t.desc()
     
     def stop_task(self,name):
@@ -232,7 +228,7 @@ class Jmanager():
         if name not in self.tasks:
             return 0
         t = self.tasks[name]
-        return r.remove()
+        return t.remove()
 
     def run_task(self):
         self.logger.debug(f"jtask thread ready in thread {threading.get_ident()}")
@@ -430,7 +426,7 @@ class Jtask():
         m3u8_url = m3u8_url[0]
         self.logger.info(f"m3u8: {m3u8_url}")
 
-        self._get_m3u8(m3u8_url)
+        self._get_m3u8(m3u8_url) # timeout: 410 Gone
        
 
     def run(self):
@@ -483,17 +479,7 @@ class Jtask():
 
     # convert task to description obj
     def desc(self,detail = False):
-        d = {"name":self.name,"url":self.url,"status":self.status}
-        if 'total' in self.downloadinfo :
-            d['total'] = self.downloadinfo['total']
-            d['progress'] = self.downloadinfo['progress']
-        for k,v in self.metainfo.items():
-            d[k] = v
-        if detail :
-            d['downloadinfo'] = self.downloadinfo
-        for k,v in d.items():
-            if isinstance(v,str):
-                d[k] = v.lstrip('.')
+        d = self.info.to_dict()
         return d
 
     # fill task with description obj
