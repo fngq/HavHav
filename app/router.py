@@ -93,12 +93,27 @@ async def file_list(request:Request):
 
 filerouter = APIRouter()
 @filerouter.get("/{file_path:path}")
-async def srvfile(file_path: str):
+async def srvfile(file_path: str, request: Request):
     logger.debug(f"serve file {file_path}")
-    response = FileResponse(f"{DownloadPath}/{file_path}")
-    cd = f"attachment; filename={file_path.split('/')[-1]}"
-    response.headers["Content-Disposition"] = cd 
-    return response
+    full_path = f"{DownloadPath}/{file_path}"
+    filename = file_path.split('/')[-1]
+    
+    # 获取文件大小
+    file_size = os.path.getsize(full_path)
+    logger.info(f"file size {file_size}")
+    # 设置响应头，移除 content_disposition_type="attachment"
+    headers = {
+        "Content-Length": str(file_size),
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": f'attachment; filename*=UTF-8\'\'{filename}',
+        "Content-Type": "application/octet-stream"
+    }
+    
+    return FileResponse(
+        path=full_path,
+        headers=headers,
+        filename=filename,
+    )
 
 def init_routers(app: FastAPI):
     app.include_router(router, prefix='/api', tags=['v1'])

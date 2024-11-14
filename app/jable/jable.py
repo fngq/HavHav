@@ -1,4 +1,3 @@
-
 import requests
 import time
 import os
@@ -109,11 +108,17 @@ class TaskInfo:
         return {k: v for k, v in self.__dict__.items() if v is not None}
 
     @classmethod
-    def from_dict(cls, data: dict) :
+    def from_dict(cls, data: dict):
         """从字典创建实例,用于从JSON反序列化"""
-        if 'status' in data:
-            data['status'] = TaskStatus(data['status'])
-        return cls(**data)
+        # 动态获取TaskInfo类的字段
+        valid_fields = set(cls.__init__.__code__.co_varnames[1:])  # 排除self参数
+        
+        filtered_data = {k: v for k, v in data.items() if k in valid_fields}
+        
+        if 'status' in filtered_data:
+            filtered_data['status'] = TaskStatus(filtered_data['status'])
+
+        return cls(**filtered_data)
 
 @dataclass
 class DownloadInfo:
@@ -152,24 +157,29 @@ class Jmanager():
         self.tasks : TOrderedDict[str,Jtask] = OrderedDict()
         self.taskq = Queue(maxsize=10) # 任务队列
         self.max_worker = workers
-        self.executer = ThreadPoolExecutor(max_workers=workers)
+        self.executer = ThreadPoolExecutor(max_workers=self.max_worker)
         self.stop = threading.Event()
         self._exit = threading.Event()
 
     def init(self):
-        self.logger.debug(f"jmanager thread {threading.get_ident()}")
+        self.logger.debug(f"jmanager thread {threading.get_ident()},max worker {self.max_worker}")
         for i in range(self.max_worker):
             self.executer.submit(self.run_task)
+        self.load_history()
     
     def load_history(self):
         tasks = []
+        self.logger.debug(f"load history from {self.downloadDir}")
         for item in os.scandir(self.downloadDir):
             if not item.is_dir():
                 continue
             task = self.load_task(item.path)
             if task :
                 tasks.append(task)
-        tasks.sort()
+        self.logger.debug(f"load {len(tasks)} tasks")
+        tasks.sort(key=lambda x: x.info.start_time if x.info.start_time else 0, reverse=True)
+        for t in tasks :
+            self.tasks[t.name] = t
             
     def load_task(self,path):
         metapath = os.path.join(path,"meta.json")
@@ -183,9 +193,6 @@ class Jmanager():
 
     def dirName(self):
         return self.downloadDir
-
-    def load_history(self):
-        folder = self.downloadDir
 
     def task_list(self):
         ts = [] 
@@ -484,9 +491,8 @@ class Jtask():
 
     # fill task with description obj
     def undesc(self,data):
-        self._url = urlparse(data.get("url",''))
-        self.status = TaskStatus(data.get("status"))
-        
+        self._url = data.get("url",'')
+        self.info = TaskInfo.from_dict(data)
 
     def load_from_file(self,dirname):
         try:
