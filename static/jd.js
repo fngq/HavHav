@@ -54,9 +54,9 @@ function file_list(callback) {
     var url = "/api/file/list"
     http_get(url, null, callback)
 }
-function stop_task(url, taskurl, callback) {
+function stop_task(name, callback) {
     var url = "/api/task/stop";
-    http_get(url, { "url": taskurl }, callback);
+    http_get(url, { "name": name }, callback);
 }
 
 function createRow(task) {
@@ -93,10 +93,41 @@ function createRow(task) {
     protxt.attr('class', 'progress-str')
     protxt.text(String(Math.floor(task.progress/task.total * 10000) / 100) + '%')
 
-    // 创建 "stop" 按钮
-    const stopButton = $('<button>')
-        .text('Stop')
-        .on('click', () => alert('Stopped'))
+    // 创建状态按钮
+    const actionButton = $('<button>')
+        .on('click', () => {
+            if (task.status === 'Running') {
+                // Stop 逻辑
+                if (confirm(`确定要停止任务 "${task.name}" 吗？`)) {
+                    stop_task(task.name, (response) => {
+                        console.log('停止任务响应:', response);
+                        update_task_list();
+                    });
+                }
+            } else if (['Canceled', 'Failed'].includes(task.status)) {
+                // Start 逻辑
+                if (confirm(`确定要重新开始任务 "${task.name}" 吗？`)) {
+                    add_task(() => {
+                        console.log('重新开始任务:', task.name);
+                        update_task_list();
+                    });
+                }
+            }
+        });
+
+    // 根据任务状态设置按钮状态和文本
+    if (task.status === 'Running') {
+        actionButton.text('Stop')
+            .attr('title', '点击停止任务');
+    } else if (['Canceled', 'Failed'].includes(task.status)) {
+        actionButton.text('Start')
+            .attr('title', '点击重新开始任务');
+    } else {
+        actionButton.prop('disabled', true)
+            .css('opacity', '0.5')
+            .text('Stop')
+            .attr('title', '任务无法操作');
+    }
 
     // 创建 "下载" 链接
     const download = $('<a>')
@@ -121,7 +152,7 @@ function createRow(task) {
     row.append(title);
     row.append(progressContainer);
     row.append(protxt)
-    row.append(stopButton);
+    row.append(actionButton);
     row.append(download);
 
     // 将行元素添加到容器中
