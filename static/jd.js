@@ -58,6 +58,21 @@ function stop_task(name, callback) {
     var url = "/api/task/stop";
     http_get(url, { "name": name }, callback);
 }
+function start_task(name, callback) {
+    var url = "/api/task/start";
+    http_get(url, { "name": name }, callback);
+}
+
+function formatFileSize(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const k = 1024;
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
+}
+
 
 function createRow(task) {
     // 创建图片
@@ -92,6 +107,9 @@ function createRow(task) {
     const protxt = $('<div>')
     protxt.attr('class', 'progress-str')
     protxt.text(String(Math.floor(task.progress/task.total * 10000) / 100) + '%')
+    if (task.status === 'Finished' && task.video_size){
+        protxt.text(formatFileSize(task.video_size))
+    }
 
     // 创建状态按钮
     const actionButton = $('<button>')
@@ -107,7 +125,7 @@ function createRow(task) {
             } else if (['Canceled', 'Failed'].includes(task.status)) {
                 // Start 逻辑
                 if (confirm(`确定要重新开始任务 "${task.name}" 吗？`)) {
-                    add_task(() => {
+                    start_task(task.name, (response) => {
                         console.log('重新开始任务:', task.name);
                         update_task_list();
                     });

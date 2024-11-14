@@ -150,6 +150,7 @@ html,body {
     width: 60px;  /* 固定百分比文字宽度 */
     flex-shrink: 0;
     text-align: right;
+    white-space: nowrap;
 }
 
 .row button {
