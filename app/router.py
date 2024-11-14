@@ -53,6 +53,11 @@ async def add_task(request:Request,url:str):
         )
     return {"code":1,"msg":"ok","url":url,"result":ret}
 
+@router.get("/start")
+async def start_task(request:Request,name:str):
+    ret = manager.start_task(name)
+    return {"code":1,"msg":ret}
+
 @router.get("/list")
 async def list_task(request:Request):
     tasks = manager.task_list()
@@ -98,10 +103,8 @@ async def srvfile(file_path: str, request: Request):
     full_path = f"{DownloadPath}/{file_path}"
     filename = file_path.split('/')[-1]
     
-    # 获取文件大小
     file_size = os.path.getsize(full_path)
-    logger.info(f"file size {file_size}")
-    # 设置响应头，移除 content_disposition_type="attachment"
+    logger.debug(f"file size {file_size}")
     headers = {
         "Content-Length": str(file_size),
         "Accept-Ranges": "bytes",
@@ -115,7 +118,14 @@ async def srvfile(file_path: str, request: Request):
         filename=filename,
     )
 
+class EndpointFilter(logging.Filter):
+    def __init__(self,path):
+        self.path = path
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.getMessage().find(self.path) == -1
+
 def init_routers(app: FastAPI):
     app.include_router(router, prefix='/api', tags=['v1'])
     app.include_router(filerouter,prefix=DownloadPath.lstrip('.'))
+    logging.getLogger("uvicorn.access").addFilter(EndpointFilter(DownloadPath.lstrip('.')))
     # app.mount("/downloads", StaticFiles(directory=DownloadPath), name="downloads")

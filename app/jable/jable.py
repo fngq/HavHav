@@ -102,6 +102,7 @@ class TaskInfo:
     cover_url: Optional[str] = None   # 封面图片原始url
     cover: Optional[str] = None       # 封面图片本地路径
     video_url: Optional[str] = None   # 视频文件路径
+    video_size: Optional[int] = None  # 视频文件大小
 
     def to_dict(self) -> dict:
         """转换为字典,用于JSON序列化"""
@@ -200,6 +201,13 @@ class Jmanager():
             ts.append(v.desc())
         ts.reverse()
         return ts
+    
+    def start_task(self,name):
+        if name not in self.tasks :
+            return 0
+        t = self.tasks[name]
+        t.run()
+        return 1
 
     def add_task(self,url):
         purl = urlparse(url)
@@ -400,6 +408,7 @@ class Jtask():
             os.rmdir(tsdir)
         self.logger.info("mp4 file created")
         self.info.video_url = videopath
+        self.info.video_size = os.path.getsize(videopath)
          
 
     def _run(self):
@@ -493,7 +502,7 @@ class Jtask():
     def undesc(self,data):
         self._url = data.get("url",'')
         self.info = TaskInfo.from_dict(data)
-
+        self.info.video_size = os.path.getsize('.'+self.info.video_url) if self.info.video_url else None
     def load_from_file(self,dirname):
         try:
             metafile = os.path.join(dirname,"meta.json")
