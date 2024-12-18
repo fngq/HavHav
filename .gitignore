@@ -2,3 +2,4 @@ __pycache__/
 downloads/
 static/*/
 .DS_Store
+*.txt

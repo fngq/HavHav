@@ -468,8 +468,9 @@ class Jtask():
             raise TaskCanceled
 
     def stop(self):
-        self.set_status(TaskStatus.Canceled)
-        self.save_metainfo()
+        if self.status == TaskStatus.Running :
+            self.set_status(TaskStatus.Canceled)
+            self.save_metainfo()
     
     # clean temprary files created during download
     def clean(self):
@@ -502,7 +503,10 @@ class Jtask():
     def undesc(self,data):
         self._url = data.get("url",'')
         self.info = TaskInfo.from_dict(data)
-        self.info.video_size = os.path.getsize('.'+self.info.video_url) if self.info.video_url else None
+        if not self.info.video_url :
+            self.info.video_size = os.path.getsize('.'+self.info.video_url) if self.info.video_url else None
+        
+
     def load_from_file(self,dirname):
         try:
             metafile = os.path.join(dirname,"meta.json")
