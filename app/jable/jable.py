@@ -265,9 +265,9 @@ class Jmanager():
         self.logger.info("jtask thread exiting")
         self._exit.wait(timeout=2)
         self.logger.info("jtask thread exited")
-
-        self.executer.shutdown(wait=False)
-        self.executer = None
+        if self.executer:
+            self.executer.shutdown(wait=False)
+            self.executer = None
 
 
 class Jtask():
