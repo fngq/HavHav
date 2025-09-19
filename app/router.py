@@ -29,12 +29,12 @@ router = APIRouter(
 
 
 
-@router.on_event("startup")
+#@router.on_event("startup")
 async def startup_event():
     logger.info("router startup")
-    manager.init()
+    # manager.init()
 
-@router.on_event("shutdown")
+#@router.on_event("shutdown")
 async def shutdown_event():
     logger.info("router closing")
     manager.close()
@@ -125,6 +125,8 @@ class EndpointFilter(logging.Filter):
         return record.getMessage().find(self.path) == -1
 
 def init_routers(app: FastAPI):
+    app.on_event("startup")(startup_event)
+    app.on_event("shutdown")(shutdown_event)
     app.include_router(router, prefix='/api', tags=['v1'])
     app.include_router(filerouter,prefix=DownloadPath.lstrip('.'))
     logging.getLogger("uvicorn.access").addFilter(EndpointFilter(DownloadPath.lstrip('.')))

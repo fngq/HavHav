@@ -159,14 +159,30 @@ class Jmanager():
         self.taskq = Queue(maxsize=10) # 任务队列
         self.max_worker = workers
         self.executer = ThreadPoolExecutor(max_workers=self.max_worker)
-        self.stop = threading.Event()
-        self._exit = threading.Event()
+        self.init()
 
     def init(self):
-        self.logger.debug(f"jmanager thread {threading.get_ident()},max worker {self.max_worker}")
+        self.logger.info(f"jmanager thread {threading.get_ident()},max worker {self.max_worker}")
         for i in range(self.max_worker):
             self.executer.submit(self.run_task)
-        self.load_history()
+        # self.load_history()
+
+    def run_task(self):
+        self.logger.info(f"jtask thread ready in thread {threading.get_ident()}")
+        while True:
+            self.logger.info(f"Current queue size: {self.taskq.qsize()}")
+            task = self.taskq.get()
+            self.logger.info(f"get new task {task.name}")
+            if task:
+                self.logger.info(f"new task in: {task.url}")
+                task.run()
+                self.taskq.task_done()
+            else :
+                self.logger.info("empty task,exit")
+                break
+
+            time.sleep(0.5)
+        self.logger.info("Download thread exit")
     
     def load_history(self):
         tasks = []
@@ -214,20 +230,20 @@ class Jmanager():
         if not purl.hostname == "jable.tv":
              raise InvalidHost(purl.hostname)
         
-        t = Jtask(logger=self.logger,url=url,downloadDir=self.downloadDir)
-        if not t.name in self.tasks :
+        t = Jtask(url=url,logger=self.logger,downloadDir=self.downloadDir)
+        if t.name in self.tasks:
+            t = self.tasks[t.name]
+        else :
             self.tasks[t.name] = t
         if t.status != TaskStatus.Running:
             self.taskq.put(t)
-        
-        self.logger.info(f"add task {self.taskq.qsize()}/{len(self.tasks)} {t.name}")
+            self.logger.info(f"add task {self.taskq.qsize()}/{len(self.tasks)} {t.url}")
         return t.desc()
     
     def stop_task(self,name):
         if name not in self.tasks :
             return 0
         t = self.tasks[name]
-        
         t.stop()
         return 1
 
@@ -245,29 +261,12 @@ class Jmanager():
         t = self.tasks[name]
         return t.remove()
 
-    def run_task(self):
-        self.logger.debug(f"jtask thread ready in thread {threading.get_ident()}")
-        while not self.stop.is_set():
-            try:
-                task = self.taskq.get(timeout=1)
-                if task :
-                    self.logger.info(f"new task in: {task.name()}")
-                    task.run()
-                    self.taskq.task_done()
-            except Empty as e :
-                continue
-            time.sleep(0.2)
-        self._exit.set()
-        self.logger.info("Download thread exiting")
+
 
     def close(self):
-        self.stop.set()
         self.logger.info("jtask thread exiting")
-        self._exit.wait(timeout=2)
-        self.logger.info("jtask thread exited")
-        if self.executer:
-            self.executer.shutdown(wait=False)
-            self.executer = None
+        for i in range(self.max_worker):
+            self.taskq.put(None)
 
 
 class Jtask():
@@ -282,20 +281,20 @@ class Jtask():
     def _initDriver(self):
         #配置Selenium參數
         options = Options()
-        options.add_argument('--no-sandbox')
+        # options.add_argument('--no-sandbox')
         options.add_argument('--ignore-certificate-errors')  # 忽略证书错误
         options.add_experimental_option('excludeSwitches', ['enable-automation']) # 禁用浏览器正在被自动化程序控制的提示
-        options.add_argument('--disable-dev-shm-usage')
+        # options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--disable-extensions')
-        options.add_argument('--headless')
+        # options.add_argument('--headless')
         options.add_argument('blink-settings=imagesEnabled=false') # 禁止加载图片
-        options.add_argument('user-agent=' + ua)
-        options.add_experimental_option("prefs", {
-            "download.default_directory": self.destDir,
-            "download.prompt_for_download": False,
-            "download.directory_upgrade": True,
-            "safebrowsing.enabled": True
-            })
+        # options.add_argument('user-agent=' + ua)
+        # options.add_experimental_option("prefs", {
+        #     "download.default_directory": self.destDir,
+        #     "download.prompt_for_download": False,
+        #     "download.directory_upgrade": True,
+        #     "safebrowsing.enabled": True
+        #     })
         dr = webdriver.Chrome(options = options)
         return dr
 
@@ -418,6 +417,7 @@ class Jtask():
             os.mkdir(destdir)
         self.check_cancel()
 
+        print("task url",self.url)
         dr = self._initDriver()
         dr.get(self.url)
         self.check_cancel()
