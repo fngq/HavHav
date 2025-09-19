@@ -165,7 +165,7 @@ class Jmanager():
         self.logger.info(f"jmanager thread {threading.get_ident()},max worker {self.max_worker}")
         for i in range(self.max_worker):
             self.executer.submit(self.run_task)
-        # self.load_history()
+        self.load_history()
 
     def run_task(self):
         self.logger.info(f"jtask thread ready in thread {threading.get_ident()}")
@@ -286,7 +286,7 @@ class Jtask():
         options.add_experimental_option('excludeSwitches', ['enable-automation']) # 禁用浏览器正在被自动化程序控制的提示
         # options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--disable-extensions')
-        # options.add_argument('--headless')
+        options.add_argument('--headless')
         options.add_argument('blink-settings=imagesEnabled=false') # 禁止加载图片
         # options.add_argument('user-agent=' + ua)
         # options.add_experimental_option("prefs", {
@@ -497,6 +497,7 @@ class Jtask():
     # convert task to description obj
     def desc(self,detail = False):
         d = self.info.to_dict()
+        d['url'] = self.url
         return d
 
     # fill task with description obj
