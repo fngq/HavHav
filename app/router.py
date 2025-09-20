@@ -102,7 +102,8 @@ async def srvfile(file_path: str, request: Request):
     logger.debug(f"serve file {file_path}")
     full_path = f"{DownloadPath}/{file_path}"
     filename = file_path.split('/')[-1]
-    
+    if not os.path.exists(full_path):
+        return 404
     file_size = os.path.getsize(full_path)
     logger.debug(f"file size {file_size}")
     headers = {

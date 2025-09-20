@@ -11,6 +11,10 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad,unpad
 
 from selenium import webdriver
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 import logging
@@ -279,23 +283,25 @@ class Jtask():
         self._session = requests.sessions.Session()
     
     def _initDriver(self):
+        service = Service(executable_path=ChromeDriverManager().install())
         #配置Selenium參數
         options = Options()
-        # options.add_argument('--no-sandbox')
+        options.add_argument('--no-sandbox')
         options.add_argument('--ignore-certificate-errors')  # 忽略证书错误
         options.add_experimental_option('excludeSwitches', ['enable-automation']) # 禁用浏览器正在被自动化程序控制的提示
-        # options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--disable-extensions')
         options.add_argument('--headless')
+        options.add_argument("--disable-gpu") 
         options.add_argument('blink-settings=imagesEnabled=false') # 禁止加载图片
-        # options.add_argument('user-agent=' + ua)
+        options.add_argument('user-agent=' + ua)
         # options.add_experimental_option("prefs", {
         #     "download.default_directory": self.destDir,
         #     "download.prompt_for_download": False,
         #     "download.directory_upgrade": True,
         #     "safebrowsing.enabled": True
         #     })
-        dr = webdriver.Chrome(options = options)
+        dr = webdriver.Chrome(service=service, options = options)
         return dr
 
     @property
@@ -421,6 +427,8 @@ class Jtask():
         dr = self._initDriver()
         dr.get(self.url)
         self.check_cancel()
+        # wait page fully loaded
+     
         # get title and cover
         title = dr.find_element(By.XPATH,"//meta[@property='og:title']").get_attribute("content")
         cover_url = dr.find_element(By.XPATH,"//meta[@property='og:image']").get_attribute("content")
