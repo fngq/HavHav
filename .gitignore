@@ -3,3 +3,4 @@ downloads/
 static/*/
 .DS_Store
 *.txt
+!requirements.txt

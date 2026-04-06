@@ -51,7 +51,7 @@ function create_task(url, callback) {
     http_get(url, null, callback)
 }
 function file_list(callback) {
-    var url = "/api/file/list"
+    var url = "/api/task/flist"
     http_get(url, null, callback)
 }
 function stop_task(name, callback) {
@@ -73,6 +73,14 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
 }
 
+function getTaskProgress(task) {
+    if (!task || !task.total || task.total <= 0) {
+        return 0;
+    }
+    const progress = task.progress || 0;
+    return Math.max(0, Math.min(100, progress / task.total * 100));
+}
+
 
 function createRow(task) {
     // 创建图片
@@ -88,11 +96,11 @@ function createRow(task) {
     // 创建进度条容器
     const progressContainer = $('<div>')
     progressContainer.attr('class', 'progress-container')
-    strprogress = String(task.progress / task.total * 100)
+    const progressValue = getTaskProgress(task)
     // 创建进度条
     const progress = $('<div>')
     progress.attr('class', 'progress')
-    progress.css('width', strprogress + '%') // 设置进度条的宽度
+    progress.css('width', progressValue + '%') // 设置进度条的宽度
 
     // 创建显示文字的元素
     const progressText = $('<div>')
@@ -106,7 +114,7 @@ function createRow(task) {
 
     const protxt = $('<div>')
     protxt.attr('class', 'progress-str')
-    protxt.text(String(Math.floor(task.progress/task.total * 10000) / 100) + '%')
+    protxt.text(String(Math.floor(progressValue * 100) / 100) + '%')
     if (task.status === 'Finished' && task.video_size){
         protxt.text(formatFileSize(task.video_size))
     }
